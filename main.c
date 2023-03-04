@@ -18,7 +18,7 @@
 
 /**
  * Describes file information obtained from getdents.
-*/
+ */
 typedef struct linux_dirent
 {
     // inode
@@ -30,29 +30,30 @@ typedef struct linux_dirent
 
 /**
  * Describes information in a a row of the composite table
-*/
-typedef struct dataRow
+ */
+typedef struct fileDescriptorEntry
 {
-    unsigned long pid;
     unsigned long fd;
     unsigned long inode;
     char filename[SYMBOLIC_LINK_BUFFER_SIZE];
-} dataRow;
+} FileDescriptorEntry;
 
 /**
- * Describes information in a row of the Vnodes table 
-*/
-typedef struct processData
+ * Describes information in a row of the Vnodes table
+ */
+typedef struct ProcessData
 {
     unsigned long pid;
     unsigned long inode;
-} processData;
+    unsigned long size;
+    FileDescriptorEntry **fileDescriptors;
+} ProcessData;
 
 /**
  * Check whether the given string is a decimal number.
  * @param checkString String to check
  * @return Returns true if checkString only contains decimal digits, false otherwise.
-*/
+ */
 bool isNumber(char *checkString)
 {
     int len = strnlen(checkString, GETDENTS_BUFFER_SIZE);
@@ -70,10 +71,10 @@ bool isNumber(char *checkString)
  * Populate a new row with inode and pid data given the information from getdents.
  * @param source A pointer to the information retrieved by getdents
  * @return A dynamically-allocated processData struct with inode and PID populated from source.
-*/
-processData *populateRow(linux_dirent *source)
+ */
+ProcessData *readProcess(linux_dirent *source)
 {
-    processData *result = (processData *)malloc(sizeof(dataRow));
+    ProcessData *result = (ProcessData *)malloc(sizeof(ProcessData));
     result->inode = source->d_ino;
     result->pid = strtoul(source->d_name, NULL, 10);
     return result;
@@ -109,115 +110,193 @@ char *getType(char d_type)
     }
 }
 
-/**
- * Given details of a PID in process, append all its of its file descriptors to aggregate and return the number of
- * file descriptors added.
- * @param process Contains a process identified by PID
- * @param aggregate The array of file descriptors to append to
- * @param startingSize The initial number of file descriptors in aggregate
- * @returns The number of file descriptors, belonging to the process, that were added.
- */
-int readFileDescriptors(processData *process, dataRow **aggregate, int startingSize)
+FileDescriptorEntry *readFileDescriptor(ProcessData *process, linux_dirent *fileEntry, char *folderPath)
 {
-    int nextIndex = startingSize;
-    char folderPath[GETDENTS_BUFFER_SIZE];
+    // temp variable to read file descriptor file name
     char fullFdPath[GETDENTS_BUFFER_SIZE * 2];
-    char fdFile[GETDENTS_BUFFER_SIZE];
+    // temp variable to store inode string
+    char inodeString[SYMBOLIC_LINK_BUFFER_SIZE];
+
+    FileDescriptorEntry *newRow = (FileDescriptorEntry *)malloc(sizeof(FileDescriptorEntry));
+    snprintf(fullFdPath, GETDENTS_BUFFER_SIZE * 2, "%s/%s", folderPath, fileEntry->d_name);
+    readlink(fullFdPath, newRow->filename, SYMBOLIC_LINK_BUFFER_SIZE);
+    newRow->fd = strtol(fileEntry->d_name, NULL, 10);
+    // TODO: This returns the wrong inode
+    // For sockets and pipes, parse the inode from the string type:[inode]
+    char *socketToken = "socket:[";
+    char *pipeToken = "pipe:[";
+    int startIndex = -1;
+    if (strncmp(newRow->filename, pipeToken, strlen(pipeToken)) == 0)
+    {
+        startIndex = strlen(pipeToken);
+    }
+    else if (strncmp(newRow->filename, socketToken, strlen(socketToken)) == 0)
+    {
+        startIndex = strlen(socketToken);
+    }
+    if (startIndex > -1)
+    {
+        int len = strnlen(newRow->filename, SYMBOLIC_LINK_BUFFER_SIZE);
+        int i = startIndex;
+        for (; i < len && newRow->filename[i] != ']'; i++)
+        {
+            inodeString[i - startIndex] = newRow->filename[i];
+        }
+        if (i < SYMBOLIC_LINK_BUFFER_SIZE)
+        {
+            inodeString[i - startIndex] = '\0';
+        }
+        newRow->inode = strtoul(inodeString, NULL, 10);
+    }
+    else
+    {
+        newRow->inode = process->inode;
+    }
+    return newRow;
+}
+
+/**
+ * Given a process of id ID, populate its array of file descriptors with data found
+ * in /proc/{ID}/fd.
+ * @param process Contains a process identified by PID
+ * @returns 0 if operation was successful, nonzero otherwise
+ */
+int readFileDescriptors(ProcessData *process)
+{
+    // generate the path and open the folder to search in
+    char folderPath[GETDENTS_BUFFER_SIZE];
     snprintf(folderPath, GETDENTS_BUFFER_SIZE, "/proc/%ld/fd/", process->pid);
     int procDirFd = open(folderPath, O_RDONLY | O_DIRECTORY);
-    char entBuffer[GETDENTS_BUFFER_SIZE];
-    long numEntries = syscall(SYS_getdents, procDirFd, entBuffer, GETDENTS_BUFFER_SIZE);
-    linux_dirent *fileEntry;
 
-    // buffer to parse inode from pipes and sockets
-    char inodeString[SYMBOLIC_LINK_BUFFER_SIZE];
+    // buffer for getdents
+    char entBuffer[GETDENTS_BUFFER_SIZE];
+
+    // number of entries found in the folder
+    long numEntries = syscall(SYS_getdents, procDirFd, entBuffer, GETDENTS_BUFFER_SIZE);
+
+    process->fileDescriptors = (FileDescriptorEntry **)malloc(sizeof(FileDescriptorEntry *) * numEntries);
+    // reset number of file descs added to zero
+    process->size = 0;
+
+    linux_dirent *fileEntry;
     while (numEntries > 0)
     {
         for (long i = 0; i < numEntries;)
         {
             fileEntry = (struct linux_dirent *)(entBuffer + i);
             // retrieve the file type, according to /proc/ docs
-            char d_type = *(entBuffer + i + fileEntry->d_reclen - 1);
-            // get subdirectories
-            char *fileType = getType(d_type);
+            // char d_type = *(entBuffer + i + fileEntry->d_reclen - 1);
+            // // get subdirectories
+            // char *fileType = getType(d_type);
             // printf("fds: %ld %s %s\n", fileEntry->d_ino, fileType, fileEntry->d_name);
             if (isNumber(fileEntry->d_name))
             {
-                dataRow *newRow = (dataRow *)malloc(sizeof(dataRow));
-                snprintf(fullFdPath, GETDENTS_BUFFER_SIZE * 2, "%s/%s", folderPath, fileEntry->d_name);
-                readlink(fullFdPath, newRow->filename, SYMBOLIC_LINK_BUFFER_SIZE);
-                newRow->pid = process->pid;
-                newRow->fd = nextIndex;
-                // TODO: This returns the wrong inode
-                // For sockets and pipes, parse the inode from the string type:[inode]
-                char *socketToken = "socket:[";
-                char *pipeToken = "pipe:[";
-                int startIndex = -1;
-                if (strncmp(newRow->filename, pipeToken, strlen(pipeToken)) == 0)
-                {
-                    startIndex = strlen(pipeToken);
-                }
-                else if (strncmp(newRow->filename, socketToken, strlen(socketToken)) == 0)
-                {
-                    startIndex = strlen(socketToken);
-                }
-                if (startIndex > -1)
-                {
-                    int len = strnlen(newRow->filename, SYMBOLIC_LINK_BUFFER_SIZE);
-                    int i = startIndex;
-                    for (; i < len && newRow->filename[i] != ']'; i++)
-                    {
-                        inodeString[i - startIndex] = newRow->filename[i];
-                    }
-                    if (i < SYMBOLIC_LINK_BUFFER_SIZE)
-                    {
-                        inodeString[i - startIndex] = '\0';
-                    }
-                    newRow->inode = strtoul(inodeString, NULL, 10);
-                }
-                else
-                {
-                    newRow->inode = process->inode;
-                }
-                aggregate[nextIndex++] = newRow;
+                // add file descriptor information to process table
+                process->fileDescriptors[process->size] = readFileDescriptor(process, fileEntry, folderPath);
+                process->size++;
             }
             i += fileEntry->d_reclen;
         }
         numEntries = syscall(SYS_getdents, procDirFd, entBuffer, GETDENTS_BUFFER_SIZE);
     }
-    return nextIndex - startingSize;
+    return 0;
+}
+
+void print_systemWide_header() {
+    printf("PID\tFD\tFilename\n");
+    printf("===============================\n");
+}
+
+void print_systemWide_footer() {
+    printf("===============================\n");
+}
+
+void print_systemWide_content(ProcessData *process) {
+    for (int i = 0; i < process->size; i++)
+    {
+        printf("%ld\t%ld\t%s\n", process->pid, process->fileDescriptors[i]->fd, process->fileDescriptors[i]->filename);
+    }
+    return;
+}
+
+void print_perProcess_header()
+{
+    printf("PID\tFD\n");
+    printf("===================\n");
+}
+
+void print_perProcess_footer() {
+    printf("===================\n");
+}
+
+void print_perProcess_content(ProcessData *process) {
+    for (int i = 0; i < process->size; i++)
+    {
+        printf("%ld\t%ld\n", process->pid, process->fileDescriptors[i]->fd);
+    }
+    return;
+}
+
+void print_vnodes_header()
+{
+    printf("PID\tinode\n");
+    printf("===================\n");
+}
+
+void print_vnodes_footer()
+{
+    printf("===================\n");
 }
 
 /**
  * Print the Vnodes file descriptor table
  * @param rows Information for each row to print
  * @param size The number of elements in rows to print
-*/
-void print_processes(processData **rows, int size)
+ */
+void print_vnodes_content(ProcessData *process)
 {
-    printf("PID\tinode\n");
-    printf("===================");
-    for (int i = 0; i < size; i++)
+    for (int i = 0; i < process->size; i++)
     {
-        printf("%ld\t%ld\n", rows[i]->pid, rows[i]->inode);
+        printf("%ld\t%ld\n", process->pid, process->fileDescriptors[i]->inode);
     }
     return;
 }
 
-/**
- * Print the composite table 
- * @param rows Information for each row to print
- * @param size The number of elements in rows to print
-*/
-void print_fds(dataRow **rows, int size)
+void print_composite_header()
 {
     printf("\tPID\tFD\tfilename\tinode\n");
-    printf("\t==============================");
-    for (int i = 0; i < size; i++)
+    printf("\t=======================================\n");
+    return;
+}
+
+void print_composite_footer()
+{
+    printf("\t=======================================\n");
+    return;
+}
+
+/**
+ * Print the composite table for a process
+ * @param rows Information for each row to print
+ * @param size The number of elements in rows to print
+ */
+void print_composite_content(ProcessData *process)
+{
+    for (int i = 0; i < process->size; i++)
     {
-        printf("%d\t%ld\t%ld\t%s\t%ld\n", i, rows[i]->pid, rows[i]->fd, rows[i]->filename, rows[i]->inode);
+        printf("%d\t%ld\t%ld\t%s\t%ld\n", i, process->pid, process->fileDescriptors[i]->fd, process->fileDescriptors[i]->filename, process->fileDescriptors[i]->inode);
     }
     return;
+}
+
+void print_table(void (*print_header)(), void (*print_content)(ProcessData *), void (*print_footer)(), ProcessData **processes, size_t numProcesses)
+{
+    (*print_header)();
+    for (size_t i = 0; i < numProcesses; i++)
+    {
+        (*print_content)(processes[i]);
+    }
+    (*print_footer)();
 }
 
 #define ARG_PER_PROCESS "--per-process"
@@ -239,8 +318,9 @@ bool startsWith(const char *haystack, const char *needle)
 
 /**
  * Print a standardized error to stderr to indicate to the user that the command arguments are incorrect.
-*/
-void notifyInvalidArguments() {
+ */
+void notifyInvalidArguments()
+{
     fprintf(stderr, "Error: Command has invalid formatting and could not be parsed.\n");
 }
 
@@ -271,6 +351,63 @@ int parseNumericalArgument(long *result, char *argv)
     return 0;
 }
 
+/**
+ * Gather data on processes in an array, except for file descriptor data
+ * @param size Pointer to int which will store to the number of processes found and put in the return array.
+ * @param processIdSelected If set to a non-negative number, then only read process if the PID matches processIdSelected.
+ * @return If successful, returns an array of pointers each pointing to data of one process. NULL otherwise.
+*/
+ProcessData** fetchProcesses(int* size, long processIdSelected) {
+    char getdentsBuffer[GETDENTS_BUFFER_SIZE];
+    long numEntries = 0;
+    *size = 0;
+    struct linux_dirent *dirEntry;
+
+    // table with pid and filename data
+    int arraySize = processIdSelected >= 0 ? 1 : 1024;
+    ProcessData **processes = (ProcessData**)malloc(sizeof(ProcessData*) * arraySize);
+    
+    // open file descriptor to /proc/
+    // int procDirFd = open("/proc/", O_RDONLY | O_DIRECTORY);
+    int procDirFd = open("/proc/", O_RDONLY | O_DIRECTORY);
+
+    numEntries = syscall(SYS_getdents, procDirFd, getdentsBuffer, GETDENTS_BUFFER_SIZE);
+    while (numEntries > 0)
+    {
+        if (numEntries < 0)
+        {
+            perror("Error calling getdents");
+            return NULL;
+        }
+        else
+        {
+            for (long i = 0; i < numEntries;)
+            {
+                dirEntry = (struct linux_dirent *)(getdentsBuffer + i);
+
+                // retrieve the file type, according to /proc/ docs
+                // char d_type = *(getdentsBuffer + i + dirEntry->d_reclen - 1);
+                // get subdirectories
+                // char *fileType = getType(d_type);
+                // printf("%ld %s %s\n", dirEntry->d_ino, fileType, dirEntry->d_name);
+
+                // consider only files with numerical name
+                if (isNumber(dirEntry->d_name))
+                {
+                    // if searching for a specific PID, ignore all others
+                    if (processIdSelected < 0 || strtol(dirEntry->d_name, NULL, 10) == processIdSelected) {
+                        processes[(*size)++] = readProcess(dirEntry);
+                    }
+                    
+                }
+                i += dirEntry->d_reclen;
+            }
+            numEntries = syscall(SYS_getdents, procDirFd, getdentsBuffer, GETDENTS_BUFFER_SIZE);
+        }
+    }
+    return processes;
+}
+
 int main(int argc, char **argv)
 {
     // TODO: Parse command line arguments
@@ -292,7 +429,7 @@ int main(int argc, char **argv)
     /**
      * Display only the composite table. Corresponds with ARG_COMPOSITE command line argument.
      */
-    bool showComposite = true;
+    bool showComposite = false;
 
     /**
      * A threshold set such that all processes with FDs assigned larger than this value will be flagged in output. Corresponds with ARG_THRESHOLD command line argument.
@@ -342,7 +479,7 @@ int main(int argc, char **argv)
             }
             else
             {
-                pidArgument = atoi(argv[i]);
+                pidArgument = atol(argv[i]);
                 if (pidArgument == 0)
                 {
                     fprintf(stderr, "Error: Invalid positional argument given.\n");
@@ -356,60 +493,42 @@ int main(int argc, char **argv)
 
     printf("Arguments parsed: %s: %d, %s: %d, %s: %d, %s: %d, %s: %ld, %s: %ld\n", ARG_PER_PROCESS, showPerProcess, ARG_SYSTEM_WIDE, showSystemWide, ARG_VNODES, showVnodes, ARG_COMPOSITE, showComposite, ARG_THRESHOLD, threshold, "PID", pidArgument);
 
-    return 0;
-
-    char getdentsBuffer[GETDENTS_BUFFER_SIZE];
-    long numEntries = 0;
-    struct linux_dirent *dirEntry;
-
-    /**
-     * The number of process entries added to rows
-     */
-    int numProcessesFound = 0;
-    // table with pid and filename data
-    processData *processes[1024];
-
-    // the number of fds added to fds
-    int numFdsFound = 0;
-    // table with fds
-    dataRow *fds[1024];
-
-    // open file descriptor to /proc/
-    // int procDirFd = open("/proc/", O_RDONLY | O_DIRECTORY);
-    int procDirFd = open("/proc/", O_RDONLY | O_DIRECTORY);
-
-    numEntries = syscall(SYS_getdents, procDirFd, getdentsBuffer, GETDENTS_BUFFER_SIZE);
-    while (numEntries > 0)
-    {
-        if (numEntries < 0)
-        {
-            perror("Error calling getdents");
-            return 1;
-        }
-        else
-        {
-            for (long i = 0; i < numEntries;)
-            {
-                dirEntry = (struct linux_dirent *)(getdentsBuffer + i);
-                // retrieve the file type, according to /proc/ docs
-                char d_type = *(getdentsBuffer + i + dirEntry->d_reclen - 1);
-                // get subdirectories
-                char *fileType = getType(d_type);
-                // printf("%ld %s %s\n", dirEntry->d_ino, fileType, dirEntry->d_name);
-                if (isNumber(dirEntry->d_name))
-                {
-                    processes[numProcessesFound++] = populateRow(dirEntry);
-                }
-                i += dirEntry->d_reclen;
-            }
-            numEntries = syscall(SYS_getdents, procDirFd, getdentsBuffer, GETDENTS_BUFFER_SIZE);
-        }
-    }
+    int numProcessesFound;
+    ProcessData** processes = fetchProcesses(&numProcessesFound, pidArgument);
+    
     for (int i = 0; i < numProcessesFound; i++)
     {
-        int newEntries = readFileDescriptors(processes[i], fds, numFdsFound);
-        numFdsFound += newEntries;
+        int status = readFileDescriptors(processes[i]);
+        if (status != 0) {
+            return -1;
+        }
     }
-    print_processes(processes, numProcessesFound);
-    print_fds(fds, numFdsFound);
+
+    if (showPerProcess) {
+        print_table(print_perProcess_header, print_perProcess_content, print_perProcess_footer, processes, numProcessesFound);
+    }
+
+    if (showSystemWide) {
+        print_table(print_systemWide_header, print_systemWide_content, print_systemWide_footer, processes, numProcessesFound);
+    }
+
+    if (showVnodes) {
+        print_table(print_vnodes_header, print_vnodes_content, print_vnodes_footer, processes, numProcessesFound);
+    }
+
+    // show composite table if explicitly given in arguments, or if no table arguments were given
+    // TODO: Should row numbers be added to all tables, not only composite? The two composite tables in the example have varied behavior for whether or not to print row numbers.
+    if (showComposite || (!showPerProcess && !showSystemWide && !showVnodes && !showComposite)) {
+        print_table(print_composite_header, print_composite_content, print_composite_footer, processes, numProcessesFound);
+    } 
+
+    // Free arrays used to store processes and file descs 
+    for (int i = 0; i < numProcessesFound; i++) {
+        for (int fd = 0; fd < processes[i]->size; fd++) {
+            free(processes[i]->fileDescriptors[fd]);
+        }
+        free(processes[i]);
+    }
+
+    return 0;
 }
