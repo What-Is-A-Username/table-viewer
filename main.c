@@ -202,101 +202,167 @@ int readFileDescriptors(ProcessData *process)
     return 0;
 }
 
-void print_systemWide_header() {
-    printf("PID\tFD\tFilename\n");
-    printf("===============================\n");
+/**
+ * Print header for the system-wide file descriptor table
+ * @param stream Stream to output plain-text to
+*/
+void print_systemWide_header(FILE *stream)
+{
+    fprintf(stream, "PID\tFD\tFilename\n");
+    fprintf(stream, "===============================\n");
 }
 
-void print_systemWide_footer() {
-    printf("===============================\n");
+/**
+ * Print footer for the system-wide file descriptor table
+ * @param stream Stream to output plain-text to
+*/
+void print_systemWide_footer(FILE *stream)
+{
+    fprintf(stream, "===============================\n");
 }
 
-void print_systemWide_content(ProcessData *process) {
+/**
+ * Print table rows of a process for the system-wide file descriptor table
+ * @param process Process to print
+ * @param stream Stream to output plain-text to
+*/
+void print_systemWide_content(ProcessData *process, FILE *stream)
+{
     for (int i = 0; i < process->size; i++)
     {
-        printf("%ld\t%ld\t%s\n", process->pid, process->fileDescriptors[i]->fd, process->fileDescriptors[i]->filename);
+        fprintf(stream, "%ld\t%ld\t%s\n", process->pid, process->fileDescriptors[i]->fd, process->fileDescriptors[i]->filename);
     }
     return;
 }
 
-void print_perProcess_header()
+/**
+ * Print header for the process file descriptor table
+ * @param stream Stream to output plain-text to
+*/
+void print_perProcess_header(FILE *stream)
 {
-    printf("PID\tFD\n");
-    printf("===================\n");
+    fprintf(stream, "PID\tFD\n");
+    fprintf(stream, "===================\n");
 }
 
-void print_perProcess_footer() {
-    printf("===================\n");
+/**
+ * Print footer for the process file descriptor table
+ * @param stream Stream to output plain-text to
+*/
+void print_perProcess_footer(FILE *stream)
+{
+    fprintf(stream, "===================\n");
 }
 
-void print_perProcess_content(ProcessData *process) {
+/**
+ * Print table rows of a process for the process file descriptor table
+ * @param process Process to print
+ * @param stream Stream to output plain-text to
+*/
+void print_perProcess_content(ProcessData *process, FILE *stream)
+{
     for (int i = 0; i < process->size; i++)
     {
-        printf("%ld\t%ld\n", process->pid, process->fileDescriptors[i]->fd);
+        fprintf(stream, "%ld\t%ld\n", process->pid, process->fileDescriptors[i]->fd);
     }
     return;
 }
 
-void print_vnodes_header()
+/**
+ * Print header for the Vnodes file descriptor table
+ * @param stream Stream to output plain-text to
+*/
+void print_vnodes_header(FILE *stream)
 {
-    printf("PID\tinode\n");
-    printf("===================\n");
+    fprintf(stream, "PID\tinode\n");
+    fprintf(stream, "===================\n");
 }
 
-void print_vnodes_footer()
+/**
+ * Print footer for the Vnodes file descriptor table
+ * @param stream Stream to output plain-text to
+*/
+void print_vnodes_footer(FILE *stream)
 {
-    printf("===================\n");
+    fprintf(stream, "===================\n");
 }
 
+/**
+ * Print table rows of a process for the Vnodes file descriptor table
+ * @param process Process to print
+ * @param stream Stream to output plain-text to
+*/
 /**
  * Print the Vnodes file descriptor table
  * @param rows Information for each row to print
  * @param size The number of elements in rows to print
  */
-void print_vnodes_content(ProcessData *process)
+void print_vnodes_content(ProcessData *process, FILE *stream)
 {
     for (int i = 0; i < process->size; i++)
     {
-        printf("%ld\t%ld\n", process->pid, process->fileDescriptors[i]->inode);
+        fprintf(stream, "%ld\t%ld\n", process->pid, process->fileDescriptors[i]->inode);
     }
     return;
 }
 
-void print_composite_header()
+/**
+ * Print header for the composite table
+ * @param stream Stream to output plain-text to
+*/
+void print_composite_header(FILE *stream)
 {
-    printf("\tPID\tFD\tfilename\tinode\n");
-    printf("\t=======================================\n");
+    fprintf(stream, "\tPID\tFD\tfilename\tinode\n");
+    fprintf(stream, "\t=======================================\n");
     return;
 }
 
-void print_composite_footer()
+/**
+ * Print footer for the composite table
+ * @param stream Stream to output plain-text to
+*/
+void print_composite_footer(FILE *stream)
 {
-    printf("\t=======================================\n");
+    fprintf(stream, "\t=======================================\n");
     return;
 }
 
 /**
  * Print the composite table for a process
- * @param rows Information for each row to print
- * @param size The number of elements in rows to print
+ * @param process Process to print
+ * @param stream Stream to output plain-text to
  */
-void print_composite_content(ProcessData *process)
+void print_composite_content(ProcessData *process, FILE *stream)
 {
     for (int i = 0; i < process->size; i++)
     {
-        printf("%d\t%ld\t%ld\t%s\t%ld\n", i, process->pid, process->fileDescriptors[i]->fd, process->fileDescriptors[i]->filename, process->fileDescriptors[i]->inode);
+        fprintf(stream, "%d\t%ld\t%ld\t%s\t%ld\n", i, process->pid, process->fileDescriptors[i]->fd, process->fileDescriptors[i]->filename, process->fileDescriptors[i]->inode);
     }
     return;
 }
 
-void print_table(void (*print_header)(), void (*print_content)(ProcessData *), void (*print_footer)(), ProcessData **processes, size_t numProcesses)
+/**
+ * Print process and file descriptor data to stream.
+ * @param print_header Function used to print the table header
+ * @param print_content Function used to print a process in the table
+ * @param print_footer Function used to print the table footer
+ * @param processes An array of all processes to consider.
+ * @param numProcesses The size of the processes array.
+ * @param stream Stream to output to
+*/
+void print_table(void (*print_header)(FILE *),
+                 void (*print_content)(ProcessData *, FILE *),
+                 void (*print_footer)(FILE *),
+                 ProcessData **processes,
+                 size_t numProcesses,
+                 FILE *stream)
 {
-    (*print_header)();
+    (*print_header)(stream);
     for (size_t i = 0; i < numProcesses; i++)
     {
-        (*print_content)(processes[i]);
+        (*print_content)(processes[i], stream);
     }
-    (*print_footer)();
+    (*print_footer)(stream);
 }
 
 #define ARG_PER_PROCESS "--per-process"
@@ -304,6 +370,11 @@ void print_table(void (*print_header)(), void (*print_content)(ProcessData *), v
 #define ARG_VNODES "--Vnodes"
 #define ARG_COMPOSITE "--composite"
 #define ARG_THRESHOLD "--threshold"
+#define ARG_OUTPUT_BINARY "--output_binary"
+#define ARG_OUTPUT_TXT "--output_TXT"
+
+#define BINARY_OUT_NAME "compositeTable.bin"
+#define TXT_OUT_NAME "compositeTable.txt"
 
 /**
  * Check if a substring exists in a string.
@@ -328,7 +399,7 @@ void notifyInvalidArguments()
  * Parse an command argument key-value pair separated by an equal sign and store its result.
  * @param result Pointer to where the value will be assigned to
  * @param argv A string representing the command string and the value (e.g. "--samples=3")
- * @returns 0 if operation was successful, 1 otherwise
+ * @returns Returns 0 if operation was successful, 1 otherwise
  */
 int parseNumericalArgument(long *result, char *argv)
 {
@@ -356,8 +427,9 @@ int parseNumericalArgument(long *result, char *argv)
  * @param size Pointer to int which will store to the number of processes found and put in the return array.
  * @param processIdSelected If set to a non-negative number, then only read process if the PID matches processIdSelected.
  * @return If successful, returns an array of pointers each pointing to data of one process. NULL otherwise.
-*/
-ProcessData** fetchProcesses(int* size, long processIdSelected) {
+ */
+ProcessData **fetchProcesses(int *size, long processIdSelected)
+{
     char getdentsBuffer[GETDENTS_BUFFER_SIZE];
     long numEntries = 0;
     *size = 0;
@@ -365,8 +437,8 @@ ProcessData** fetchProcesses(int* size, long processIdSelected) {
 
     // table with pid and filename data
     int arraySize = processIdSelected >= 0 ? 1 : 1024;
-    ProcessData **processes = (ProcessData**)malloc(sizeof(ProcessData*) * arraySize);
-    
+    ProcessData **processes = (ProcessData **)malloc(sizeof(ProcessData *) * arraySize);
+
     // open file descriptor to /proc/
     // int procDirFd = open("/proc/", O_RDONLY | O_DIRECTORY);
     int procDirFd = open("/proc/", O_RDONLY | O_DIRECTORY);
@@ -395,10 +467,10 @@ ProcessData** fetchProcesses(int* size, long processIdSelected) {
                 if (isNumber(dirEntry->d_name))
                 {
                     // if searching for a specific PID, ignore all others
-                    if (processIdSelected < 0 || strtol(dirEntry->d_name, NULL, 10) == processIdSelected) {
+                    if (processIdSelected < 0 || strtol(dirEntry->d_name, NULL, 10) == processIdSelected)
+                    {
                         processes[(*size)++] = readProcess(dirEntry);
                     }
-                    
                 }
                 i += dirEntry->d_reclen;
             }
@@ -408,6 +480,66 @@ ProcessData** fetchProcesses(int* size, long processIdSelected) {
     return processes;
 }
 
+/**
+ * Print information of processes that have more file descriptors than the given threshold. These are "offending processes".
+ * @param threshold The maximum number of file descriptors a process can have before it is printed.
+ * @param processes An array of all processes to consider.
+ * @param numProcesses The size of the processes array.
+*/
+void printOffendingProcesses(long threshold, ProcessData **processes, int numProcesses)
+{
+    bool foundFirstOffender = false;
+    printf("## Offending processes:\n");
+    for (int i = 0; i < numProcesses; i++)
+    {
+        if (processes[i]->size > threshold)
+        {
+            if (!foundFirstOffender)
+            {
+                foundFirstOffender = true;
+            }
+            else
+            {
+                printf(", ");
+            }
+            printf("%ld (%ld)", processes[i]->pid, processes[i]->size);
+        }
+    }
+    if (!foundFirstOffender)
+    {
+        printf("None!");
+    }
+    printf("\n");
+}
+
+/**
+ * Save composite table to binary file.
+ * @param processes Structs containing all processes and file descriptors to output to binary
+ * @param numProcesses The total number of processes to output
+ * @return Returns 0 if operation was successful, nonzero otherwise
+*/
+int print_composite_binary(ProcessData **processes, int numProcesses) {
+    FILE* binaryStream = fopen(BINARY_OUT_NAME, "wb");
+    if (binaryStream == NULL) {
+        perror("Error opening to .bin output file");
+        return -1;
+    }
+    for (size_t i = 0; i < numProcesses; i++)
+    {
+        fwrite(&processes[i]->pid, sizeof(processes[i]->pid), 1, binaryStream);
+        fwrite(&processes[i]->size, sizeof(processes[i]->size), 1, binaryStream);
+        for (size_t j = 0; j < processes[i]->size; j++)
+        {
+            fwrite(processes[i]->fileDescriptors[j], sizeof(FileDescriptorEntry), 1, binaryStream);
+        }
+    }
+    fclose(binaryStream);
+    return 0;
+}
+
+/**
+ * Entry point of program.
+*/
 int main(int argc, char **argv)
 {
     // TODO: Parse command line arguments
@@ -432,6 +564,11 @@ int main(int argc, char **argv)
     bool showComposite = false;
 
     /**
+     * Print offending processes, defined by having more file descriptors than the number set in threshold.
+    */
+    bool thresholdSet = false;
+
+    /**
      * A threshold set such that all processes with FDs assigned larger than this value will be flagged in output. Corresponds with ARG_THRESHOLD command line argument.
      */
     long threshold = __LONG_MAX__;
@@ -445,6 +582,19 @@ int main(int argc, char **argv)
      * Has a process ID been set via command line arguments?
      */
     bool pidSet = false;
+
+    // TODO: Implement --output_TXT and --output_binary to save composite table to compositeTable.txt and compositeTable.bin respectively.
+
+    /**
+     * Output composite table to text?
+     */
+    bool outputTxt = false;
+
+    /**
+     * Output composite table to binary?
+     */
+    bool outputBinary = false;
+
     for (int i = 1; i < argc; i++)
     {
         if (strncmp(argv[i], ARG_PER_PROCESS, MAX_COMMAND_LINE_ARGUMENT_LENGTH) == 0)
@@ -463,12 +613,21 @@ int main(int argc, char **argv)
         {
             showVnodes = true;
         }
+        else if (strncmp(argv[i], ARG_OUTPUT_TXT, MAX_COMMAND_LINE_ARGUMENT_LENGTH) == 0)
+        {
+            outputTxt = true;
+        }
+        else if (strncmp(argv[i], ARG_OUTPUT_BINARY, MAX_COMMAND_LINE_ARGUMENT_LENGTH) == 0)
+        {
+            outputBinary = true;
+        }
         else if (startsWith(argv[i], ARG_THRESHOLD))
         {
             if (parseNumericalArgument(&threshold, argv[i]) != 0)
             {
                 return 1;
             }
+            thresholdSet = true;
         }
         else
         {
@@ -494,37 +653,62 @@ int main(int argc, char **argv)
     printf("Arguments parsed: %s: %d, %s: %d, %s: %d, %s: %d, %s: %ld, %s: %ld\n", ARG_PER_PROCESS, showPerProcess, ARG_SYSTEM_WIDE, showSystemWide, ARG_VNODES, showVnodes, ARG_COMPOSITE, showComposite, ARG_THRESHOLD, threshold, "PID", pidArgument);
 
     int numProcessesFound;
-    ProcessData** processes = fetchProcesses(&numProcessesFound, pidArgument);
-    
+    ProcessData **processes = fetchProcesses(&numProcessesFound, pidArgument);
+
     for (int i = 0; i < numProcessesFound; i++)
     {
         int status = readFileDescriptors(processes[i]);
-        if (status != 0) {
+        if (status != 0)
+        {
             return -1;
         }
     }
 
-    if (showPerProcess) {
-        print_table(print_perProcess_header, print_perProcess_content, print_perProcess_footer, processes, numProcessesFound);
+    if (showPerProcess)
+    {
+        print_table(print_perProcess_header, print_perProcess_content, print_perProcess_footer, processes, numProcessesFound, stdout);
     }
 
-    if (showSystemWide) {
-        print_table(print_systemWide_header, print_systemWide_content, print_systemWide_footer, processes, numProcessesFound);
+    if (showSystemWide)
+    {
+        print_table(print_systemWide_header, print_systemWide_content, print_systemWide_footer, processes, numProcessesFound, stdout);
     }
 
-    if (showVnodes) {
-        print_table(print_vnodes_header, print_vnodes_content, print_vnodes_footer, processes, numProcessesFound);
+    if (showVnodes)
+    {
+        print_table(print_vnodes_header, print_vnodes_content, print_vnodes_footer, processes, numProcessesFound, stdout);
     }
 
     // show composite table if explicitly given in arguments, or if no table arguments were given
     // TODO: Should row numbers be added to all tables, not only composite? The two composite tables in the example have varied behavior for whether or not to print row numbers.
-    if (showComposite || (!showPerProcess && !showSystemWide && !showVnodes && !showComposite)) {
-        print_table(print_composite_header, print_composite_content, print_composite_footer, processes, numProcessesFound);
-    } 
+    if (showComposite || (!showPerProcess && !showSystemWide && !showVnodes && !showComposite))
+    {
+        print_table(print_composite_header, print_composite_content, print_composite_footer, processes, numProcessesFound, stdout);
+    }
 
-    // Free arrays used to store processes and file descs 
-    for (int i = 0; i < numProcessesFound; i++) {
-        for (int fd = 0; fd < processes[i]->size; fd++) {
+    if (outputTxt) {
+        FILE* txtStream = fopen(TXT_OUT_NAME, "w");
+        if (txtStream == NULL) {
+            perror("Error opening to .txt output file");
+            return -1;
+        }
+        print_table(print_composite_header, print_composite_content, print_composite_footer, processes, numProcessesFound, txtStream);
+        fclose(txtStream);
+    }
+
+    else if (outputBinary) {
+        print_composite_binary(processes, numProcessesFound);
+    }
+
+    if (thresholdSet) {
+        printOffendingProcesses(threshold, processes, numProcessesFound);
+    }
+
+    // Free array memory used to store processes and file descriptors
+    for (int i = 0; i < numProcessesFound; i++)
+    {
+        for (int fd = 0; fd < processes[i]->size; fd++)
+        {
             free(processes[i]->fileDescriptors[fd]);
         }
         free(processes[i]);
