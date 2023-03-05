@@ -7,9 +7,9 @@ tableViewer: stringUtils.o printTables.o readFileDescriptors.o readProcesses.o m
 .PHONY: clean
 
 clean:
-	rm -f printTables.o processes.o readFileDescriptors.o readProcesses.o stringUtils.o
+	rm -f printTables.o processes.o readFileDescriptors.o readProcesses.o stringUtils.o main.o
 
-.PHONY cleandist
+.PHONY: cleandist
 
 cleandist:
-	rm -f printTables.o processes.o readFileDescriptors.o readProcesses.o stringUtils.o tableViewer
+	rm -f printTables.o processes.o readFileDescriptors.o readProcesses.o stringUtils.o main.o tableViewer
