@@ -2,6 +2,9 @@
 #define READ_PROCESSES_H
 
 #include "processes.h"
+#include <stddef.h>
+
+extern void freeProcesses(ProcessData** processes, int size);
 
 extern ProcessData *readProcess(linux_dirent *source);
 

@@ -3,6 +3,11 @@
 
 #include <stdbool.h>
 
+#define SOCKET_TOKEN "socket:["
+
+#define SOCKET_TOKEN "socket:["
+#define PIPE_TOKEN "pipe:["
+
 extern bool startsWith(const char *haystack, const char *needle);
 
 extern bool isNumber(char *checkString);

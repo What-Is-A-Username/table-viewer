@@ -5,10 +5,18 @@
 #include <dirent.h>
 #include <string.h>
 #include <stdio.h>
+#include <sys/stat.h>
 
 #include "processes.h"
 #include "stringUtils.h"
 
+/**
+ * Extract file descriptor information
+ * @param process Data of process to which this file descriptor belongs
+ * @param fileEntry File information of the file descriptor file to be read, as retrieved by getdents
+ * @param folderPath Absolute path of parent folder containing the file descriptor
+ * @return Data about the file descriptor.
+ */
 FileDescriptorEntry *readFileDescriptor(ProcessData *process, linux_dirent *fileEntry, char *folderPath)
 {
     // temp variable to read file descriptor file name
@@ -20,23 +28,48 @@ FileDescriptorEntry *readFileDescriptor(ProcessData *process, linux_dirent *file
     snprintf(fullFdPath, GETDENTS_BUFFER_SIZE * 2, "%s/%s", folderPath, fileEntry->d_name);
     readlink(fullFdPath, newRow->filename, SYMBOLIC_LINK_BUFFER_SIZE);
     newRow->fd = strtol(fileEntry->d_name, NULL, 10);
+
+    // default inode value
+    newRow->inode = process->inode;
+
     // TODO: This returns the wrong inode
     // For sockets and pipes, parse the inode from the string type:[inode]
-    char *socketToken = "socket:[";
-    char *pipeToken = "pipe:[";
     int startIndex = -1;
-    if (strncmp(newRow->filename, pipeToken, strlen(pipeToken)) == 0)
-    {
-        startIndex = strlen(pipeToken);
+
+    // sockets
+    if (strncmp(newRow->filename, SOCKET_TOKEN, strlen(SOCKET_TOKEN)) == 0)
+        startIndex = strlen(SOCKET_TOKEN);
+    // FIFO/pipes
+    else if (strncmp(newRow->filename, PIPE_TOKEN, strlen(PIPE_TOKEN)) == 0)
+        startIndex = strlen(PIPE_TOKEN);
+    else {
+        // get stats of the file descriptor file
+        struct stat stats;
+        int fd = open(fullFdPath, O_RDWR);
+        if (fstat(fd, &stats) != -1) {
+            struct stat inodestats;
+            switch(stats.st_mode & S_IFMT)
+            {
+                case S_IFDIR:
+                case S_IFREG:
+                case S_IFCHR:
+                case S_IFBLK:
+                case S_IFLNK:
+                    if (lstat(newRow->filename, &inodestats) != -1)
+                        newRow->inode = inodestats.st_ino; // inode of file
+                default:
+                    break;
+            }
+        }
+        close(fd);
     }
-    else if (strncmp(newRow->filename, socketToken, strlen(socketToken)) == 0)
-    {
-        startIndex = strlen(socketToken);
-    }
+
+    // for pipes and sockets, parse the inode from the string
     if (startIndex > -1)
     {
         int len = strnlen(newRow->filename, SYMBOLIC_LINK_BUFFER_SIZE);
         int i = startIndex;
+        // gather digits into a string
         for (; i < len && newRow->filename[i] != ']'; i++)
         {
             inodeString[i - startIndex] = newRow->filename[i];
@@ -47,10 +80,16 @@ FileDescriptorEntry *readFileDescriptor(ProcessData *process, linux_dirent *file
         }
         newRow->inode = strtoul(inodeString, NULL, 10);
     }
-    else
-    {
-        newRow->inode = process->inode;
-    }
+
+    // struct stat inodestats;
+    // if (lstat(newRow->filename, &inodestats) == -1)
+    // {
+    //     printf("FD Inodes of %ld: %ld / %ld / %ld / %s / %ld \n", process->pid, fileEntry->d_ino, newRow->inode, stats.st_ino, newRow->filename, 0l);
+    //     return NULL;
+    // } else {
+    //     printf("FD Inodes of %ld: %ld / %ld / %ld / %s / %ld \n", process->pid, fileEntry->d_ino, newRow->inode, stats.st_ino, newRow->filename, inodestats.st_ino);
+    // }
+
     return newRow;
 }
 
@@ -83,11 +122,7 @@ int readFileDescriptors(ProcessData *process)
         for (long i = 0; i < numEntries;)
         {
             fileEntry = (struct linux_dirent *)(entBuffer + i);
-            // retrieve the file type, according to /proc/ docs
-            // char d_type = *(entBuffer + i + fileEntry->d_reclen - 1);
-            // // get subdirectories
-            // char *fileType = getType(d_type);
-            // printf("fds: %ld %s %s\n", fileEntry->d_ino, fileType, fileEntry->d_name);
+
             if (isNumber(fileEntry->d_name))
             {
                 // add file descriptor information to process table
@@ -98,5 +133,6 @@ int readFileDescriptors(ProcessData *process)
         }
         numEntries = syscall(SYS_getdents, procDirFd, entBuffer, GETDENTS_BUFFER_SIZE);
     }
+    close(procDirFd);
     return 0;
 }

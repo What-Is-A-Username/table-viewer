@@ -3,6 +3,7 @@
 
 #define SYMBOLIC_LINK_BUFFER_SIZE 1024
 #define GETDENTS_BUFFER_SIZE 1024
+#define MAX_PROCESS_COUNT 2048
 
 #include <sys/stat.h>
 

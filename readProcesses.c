@@ -4,18 +4,43 @@
 #include <fcntl.h>
 #include <dirent.h>
 #include <stdio.h>
+#include <sys/stat.h>
 
 #include "processes.h"
 #include "stringUtils.h"
 
 /**
+ * Free memory used to store process and FD data
+ * @param processes An array of process data to free
+ * @param size The number of elements within processes to free, starting at index 0.
+*/
+void freeProcesses(ProcessData** processes, int size) {
+    // Free array memory used to store processes and file descriptors
+    if (processes == NULL) return;
+    for (int i = 0; i < size; i++)
+    {
+        if (processes[i] == NULL) continue;
+        if (processes[i]->fileDescriptors != NULL)
+        for (int fd = 0; fd < processes[i]->size; fd++)
+        {
+            if (processes[i]->fileDescriptors[fd] != NULL)
+                free(processes[i]->fileDescriptors[fd]);
+        }
+        free(processes[i]);
+    }
+}
+
+/**
  * Populate a new row with inode and pid data given the information from getdents.
  * @param source A pointer to the information retrieved by getdents
- * @return A dynamically-allocated processData struct with inode and PID populated from source.
+ * @return If successful, a dynamically-allocated processData struct with inode and PID populated from source. NULL otherwise.
  */
 ProcessData *readProcess(linux_dirent *source)
 {
     ProcessData *result = (ProcessData *)malloc(sizeof(ProcessData));
+    if (result == NULL) {
+        return NULL;
+    }
     result->inode = source->d_ino;
     result->pid = strtoul(source->d_name, NULL, 10);
     return result;
@@ -34,13 +59,20 @@ ProcessData **fetchProcesses(int *size, long processIdSelected)
     *size = 0;
     struct linux_dirent *dirEntry;
 
+    // buffer to store filename of process file
+    char processFilename[GETDENTS_BUFFER_SIZE];
+
     // table with pid and filename data
-    int arraySize = processIdSelected >= 0 ? 1 : 1024;
+    int arraySize = processIdSelected >= 0 ? 1 : MAX_PROCESS_COUNT;
     ProcessData **processes = (ProcessData **)malloc(sizeof(ProcessData *) * arraySize);
 
     // open file descriptor to /proc/
-    // int procDirFd = open("/proc/", O_RDONLY | O_DIRECTORY);
     int procDirFd = open("/proc/", O_RDONLY | O_DIRECTORY);
+
+    struct stat stats;
+
+    // get real user's uid for the user calling the tool
+    uid_t currentUid = getuid();
 
     numEntries = syscall(SYS_getdents, procDirFd, getdentsBuffer, GETDENTS_BUFFER_SIZE);
     while (numEntries > 0)
@@ -56,11 +88,19 @@ ProcessData **fetchProcesses(int *size, long processIdSelected)
             {
                 dirEntry = (struct linux_dirent *)(getdentsBuffer + i);
 
-                // retrieve the file type, according to /proc/ docs
-                // char d_type = *(getdentsBuffer + i + dirEntry->d_reclen - 1);
-                // get subdirectories
-                // char *fileType = getType(d_type);
-                // printf("%ld %s %s\n", dirEntry->d_ino, fileType, dirEntry->d_name);
+                // make path to file, and get stats
+                snprintf(processFilename, GETDENTS_BUFFER_SIZE, "/proc/%s", dirEntry->d_name);
+                if (lstat(processFilename, &stats) == -1) {
+                    freeProcesses(processes, arraySize);
+                    fprintf(stderr, "Failed to read stats of file %s", processFilename);
+                    return NULL;
+                } 
+
+                // skip entries not belonging to current user
+                if (stats.st_uid != currentUid) {
+                    i += dirEntry->d_reclen;
+                    continue;
+                }
 
                 // consider only files with numerical name
                 if (isNumber(dirEntry->d_name))
@@ -68,7 +108,13 @@ ProcessData **fetchProcesses(int *size, long processIdSelected)
                     // if searching for a specific PID, ignore all others
                     if (processIdSelected < 0 || strtol(dirEntry->d_name, NULL, 10) == processIdSelected)
                     {
-                        processes[(*size)++] = readProcess(dirEntry);
+                        ProcessData* process = readProcess(dirEntry);
+                        if (process == NULL) {
+                            freeProcesses(processes, arraySize);
+                            fprintf(stderr, "Failed to read data for process %s", dirEntry->d_name);
+                            return NULL;
+                        }
+                        processes[(*size)++] = process;
                     }
                 }
                 i += dirEntry->d_reclen;

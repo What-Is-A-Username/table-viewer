@@ -3,4 +3,7 @@ main
 *.out
 *.o
 tableViewer
-.vscode/
+.vscode/**
+
+compositeTable.txt
+compositeTable.bin

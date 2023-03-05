@@ -153,7 +153,7 @@ int main(int argc, char **argv)
             }
             thresholdSet = true;
         }
-        else
+        else  // parse positional argument
         {
             if (pidSet)
             {
@@ -170,22 +170,25 @@ int main(int argc, char **argv)
                 }
                 pidSet = true;
             }
-            // parse positional argument
         }
     }
 
-    printf("Arguments parsed: %s: %d, %s: %d, %s: %d, %s: %d, %s: %ld, %s: %ld\n", ARG_PER_PROCESS, showPerProcess, ARG_SYSTEM_WIDE, showSystemWide, ARG_VNODES, showVnodes, ARG_COMPOSITE, showComposite, ARG_THRESHOLD, threshold, "PID", pidArgument);
+    // printf("Arguments parsed: %s: %d, %s: %d, %s: %d, %s: %d, %s: %ld, %s: %ld\n", ARG_PER_PROCESS, showPerProcess, ARG_SYSTEM_WIDE, showSystemWide, ARG_VNODES, showVnodes, ARG_COMPOSITE, showComposite, ARG_THRESHOLD, threshold, "PID", pidArgument);
 
     // retrieve an array of processes
     int numProcessesFound;
     ProcessData **processes = fetchProcesses(&numProcessesFound, pidArgument);
+    if (processes == NULL) {
+        fprintf(stderr, "Error: Could not read processes.\n");
+        return 1;
+    }
 
     // retrieve file descriptor information
     for (int i = 0; i < numProcessesFound; i++)
     {
-        int status = readFileDescriptors(processes[i]);
-        if (status != 0)
+        if (readFileDescriptors(processes[i]) != 0)
         {
+            fprintf(stderr, "Error: Could not read file descriptors for process %ld.\n", processes[i]->pid);
             return -1;
         }
     }
@@ -219,8 +222,8 @@ int main(int argc, char **argv)
     if (outputTxt) {
         FILE* txtStream = fopen(TXT_OUT_NAME, "w");
         if (txtStream == NULL) {
-            perror("Error opening to .txt output file");
-            return -1;
+            perror("Error: Could not open .txt output file");
+            return 1;
         }
         print_table(print_composite_header, print_composite_content, print_composite_footer, processes, numProcessesFound, txtStream);
         fclose(txtStream);
@@ -228,7 +231,10 @@ int main(int argc, char **argv)
 
     // output process and file descriptor data to binary
     else if (outputBinary) {
-        print_composite_binary(BINARY_OUT_NAME, processes, numProcessesFound);
+        if (print_composite_binary(BINARY_OUT_NAME, processes, numProcessesFound) != 0) {
+            fprintf(stderr, "Error: Could not output to binary.\n");
+            return 1;
+        }
     }
 
     // print offending processes
@@ -236,15 +242,7 @@ int main(int argc, char **argv)
         printOffendingProcesses(threshold, processes, numProcessesFound);
     }
 
-    // Free array memory used to store processes and file descriptors
-    for (int i = 0; i < numProcessesFound; i++)
-    {
-        for (int fd = 0; fd < processes[i]->size; fd++)
-        {
-            free(processes[i]->fileDescriptors[fd]);
-        }
-        free(processes[i]);
-    }
+    freeProcesses(processes, numProcessesFound);
 
     return 0;
 }

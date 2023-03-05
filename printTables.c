@@ -135,7 +135,7 @@ void print_composite_content(ProcessData *process, FILE *stream)
 {
     for (int i = 0; i < process->size; i++)
     {
-        fprintf(stream, "%d\t%ld\t%ld\t%s\t%ld\n", i, process->pid, process->fileDescriptors[i]->fd, process->fileDescriptors[i]->filename, process->fileDescriptors[i]->inode);
+        fprintf(stream, "%d\t%ld\t%ld\t%s\t%ld\n", i+1, process->pid, process->fileDescriptors[i]->fd, process->fileDescriptors[i]->filename, process->fileDescriptors[i]->inode);
     }
     return;
 }
