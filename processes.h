@@ -26,7 +26,7 @@ typedef struct fileDescriptorEntry
 {
     unsigned long fd;
     unsigned long inode;
-    char filename[SYMBOLIC_LINK_BUFFER_SIZE];
+    char* filename;
 } FileDescriptorEntry;
 
 /**

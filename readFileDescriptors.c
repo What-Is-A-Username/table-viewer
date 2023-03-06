@@ -23,10 +23,20 @@ FileDescriptorEntry *readFileDescriptor(ProcessData *process, linux_dirent *file
     char fullFdPath[GETDENTS_BUFFER_SIZE * 2];
     // temp variable to store inode string
     char inodeString[SYMBOLIC_LINK_BUFFER_SIZE];
-
+    // temp variable to store buffer
+    char buffer[SYMBOLIC_LINK_BUFFER_SIZE] = "";
     FileDescriptorEntry *newRow = (FileDescriptorEntry *)malloc(sizeof(FileDescriptorEntry));
     snprintf(fullFdPath, GETDENTS_BUFFER_SIZE * 2, "%s/%s", folderPath, fileEntry->d_name);
-    readlink(fullFdPath, newRow->filename, SYMBOLIC_LINK_BUFFER_SIZE);
+    readlink(fullFdPath, buffer, SYMBOLIC_LINK_BUFFER_SIZE);
+    newRow->filename = strndup(buffer, SYMBOLIC_LINK_BUFFER_SIZE);
+    
+    // newRow->filename = (char *)malloc(sizeof(char) * len);
+    if (newRow->filename == NULL) {
+        fprintf(stderr, "Error: could not allocate enough memory for filenames.");
+        return NULL;
+    }
+    // strncpy(newRow->filename, buffer, GETDENTS_BUFFER_SIZE);
+
     newRow->fd = strtol(fileEntry->d_name, NULL, 10);
 
     // default inode value
@@ -42,23 +52,25 @@ FileDescriptorEntry *readFileDescriptor(ProcessData *process, linux_dirent *file
     // FIFO/pipes
     else if (strncmp(newRow->filename, PIPE_TOKEN, strlen(PIPE_TOKEN)) == 0)
         startIndex = strlen(PIPE_TOKEN);
-    else {
+    else
+    {
         // get stats of the file descriptor file
         struct stat stats;
         int fd = open(fullFdPath, O_RDWR);
-        if (fstat(fd, &stats) != -1) {
+        if (fstat(fd, &stats) != -1)
+        {
             struct stat inodestats;
-            switch(stats.st_mode & S_IFMT)
+            switch (stats.st_mode & S_IFMT)
             {
-                case S_IFDIR:
-                case S_IFREG:
-                case S_IFCHR:
-                case S_IFBLK:
-                case S_IFLNK:
-                    if (lstat(newRow->filename, &inodestats) != -1)
-                        newRow->inode = inodestats.st_ino; // inode of file
-                default:
-                    break;
+            case S_IFDIR:
+            case S_IFREG:
+            case S_IFCHR:
+            case S_IFBLK:
+            case S_IFLNK:
+                if (lstat(newRow->filename, &inodestats) != -1)
+                    newRow->inode = inodestats.st_ino; // inode of file
+            default:
+                break;
             }
         }
         close(fd);

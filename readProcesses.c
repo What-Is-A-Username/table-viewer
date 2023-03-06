@@ -23,8 +23,11 @@ void freeProcesses(ProcessData** processes, int size) {
         if (processes[i]->fileDescriptors != NULL)
         for (int fd = 0; fd < processes[i]->size; fd++)
         {
-            if (processes[i]->fileDescriptors[fd] != NULL)
-                free(processes[i]->fileDescriptors[fd]);
+            if (processes[i]->fileDescriptors[fd] == NULL) continue;
+            if (processes[i]->fileDescriptors[fd]->filename != NULL) {
+                free(processes[i]->fileDescriptors[fd]->filename);
+            }
+            free(processes[i]->fileDescriptors[fd]);
         }
         free(processes[i]);
     }

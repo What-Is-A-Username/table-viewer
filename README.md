@@ -283,6 +283,14 @@ time ./tableViewer --output_TXT
 time ./tableViewer --output_binary
 ```
 
+Remote binary results:
+```
+run     1
+real    0m0.055s
+user    0m0.000s
+```
+
+
 Binary results:
 ```
 run     1        2        3        4        5        6        7        8        9        10

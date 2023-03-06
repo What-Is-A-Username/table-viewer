@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include "processes.h"
 
 /**
@@ -176,13 +177,23 @@ int print_composite_binary(char* fileName, ProcessData **processes, int numProce
         perror("Error opening to .bin output file");
         return -1;
     }
+    FileDescriptorEntry* point;
+    size_t filenameLen;
     for (size_t i = 0; i < numProcesses; i++)
     {
         fwrite(&processes[i]->pid, sizeof(processes[i]->pid), 1, binaryStream);
-        fwrite(&processes[i]->size, sizeof(processes[i]->size), 1, binaryStream);
+        fwrite(&processes[i]->size, sizeof(processes[i]->size), 1, binaryStream); // number of fds
         for (size_t j = 0; j < processes[i]->size; j++)
         {
-            fwrite(processes[i]->fileDescriptors[j], sizeof(FileDescriptorEntry), 1, binaryStream);
+            point = processes[i]->fileDescriptors[j];
+            filenameLen = strnlen(point->filename, SYMBOLIC_LINK_BUFFER_SIZE);
+            fwrite(&(point->fd), sizeof(unsigned long), 1, binaryStream);
+            fwrite(&(point->inode), sizeof(unsigned long), 1, binaryStream);
+            fwrite(&filenameLen, sizeof(size_t), 1, binaryStream); // length of string
+            for (size_t i = 0; i < filenameLen; i++) // filename string
+            {
+                fwrite(point->filename + i, sizeof(char), 1, binaryStream);
+            }
         }
     }
     fclose(binaryStream);

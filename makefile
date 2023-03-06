@@ -1,5 +1,5 @@
 tableViewer: stringUtils.o printTables.o readFileDescriptors.o readProcesses.o main.o
-	gcc main.o printTables.o readFileDescriptors.o readProcesses.o stringUtils.o -o tableViewer
+	gcc main.o printTables.o readFileDescriptors.o readProcesses.o stringUtils.o -o tableViewer -Wall
 
 %.o: %.c
 	gcc -c -o $@ $< -Wall
