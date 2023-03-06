@@ -2,7 +2,7 @@
 
 This is a Linux-based tool developed with C which displays to the user information about active files, file descriptors and processes on the machine.
 
-The tool only considers processes owned by the user. This is determined by comparing the ownership of the corresponding `/proc/<pid>/` folder 
+The tool only considers processes owned by the user. This is determined by comparing the ownership of the corresponding `/proc/<pid>/` folder to the real user ID of the caller ([getuid()](https://man7.org/linux/man-pages/man2/getuid.2.html))
 
 - [Installation](#--installation)
 - [Quickstart](#--Quickstart)
@@ -14,6 +14,17 @@ The tool only considers processes owned by the user. This is determined by compa
 Installation is done with a single command.
 ```
 make tableViewer
+```
+
+Now it can be run:
+```
+./tableViewer
+```
+
+There is also a second program included (`binRead`) which provides an example of how to read the binary output. However, since this falls outside the original project specification, I make no guarantees for its functionality and expect this to be ignored for testing.
+```
+make binRead
+./binRead
 ```
 
 ## Quickstart
@@ -34,6 +45,11 @@ To disable default behavior and customize the tables shown, you can select any n
 The results can be output to plain text.
 ```
 ./tableViewer --output_TXT
+```
+
+You can set the program to flag processes possessing a high number of file descriptors.
+```
+./tableViewer --threshold=10
 ```
 
 ## Docs
@@ -254,7 +270,7 @@ Data in the binary file is written by storing all the processes one-by-one until
 The value displayed in the inode column will depend on the file descriptor's content.
 
 -   for FIFO/pipes and sockets, the inode displayed is the inode number as it appears between the brackets `[<inode>]` in the filename.
--   for directories, regular files, and character devices, the inode displayed is the inode of that file path, as determined by [`lstat`](https://man7.org/linux/man-pages/man2/lstat.2.html). If `lstat` errors, then the inode reverts to the inode of the process in `/proc/<pid>`
+-   for directories, regular files, block devices, and character devices, the inode displayed is the inode of that file path, as determined by [`lstat`](https://man7.org/linux/man-pages/man2/lstat.2.html). If `lstat` errors, then the inode reverts to the inode of the process in `/proc/<pid>`
 -   the default value for all other file descriptors, the inode displayed is the inode of process itself in `/proc/<pid>`.
 
 ## Make 
@@ -274,8 +290,13 @@ makefile rules available:
 
 Here, we compare the time needed to run various commands and compare the time required to perform binary and plain-text (ASCII) output.
 
-### Printing all PIDs
+### All processes
 To test the speed of plain-text output and binary output, the program was run with the time command in the shell using the commands below. Plain-text and binary output was each performed for 10 runs/repetitions.
+
+**All results are expressed in seconds.** Additionally, the file size is expressed in bytes, as read from `ls -l`.
+
+We find that the total time (the "real" time) needed to run the program was identical and the total kernel time (the "sys" time) was also identical. The only difference in times was between "user" times, with the binary output being slightly faster (0.0012 seconds versus 0.002 seconds, on average). 
+
 ```
 # plain-text
 time ./tableViewer --output_TXT
@@ -283,32 +304,77 @@ time ./tableViewer --output_TXT
 time ./tableViewer --output_binary
 ```
 
-Remote binary results:
-```
-run     1
-real    0m0.055s
-user    0m0.000s
-```
+Plain-text results:
+```   
+run #   1     2     3     4     5     6     7     8     9     10
+real	0.048 0.052 0.049 0.048 0.044 0.044 0.048 0.051 0.047 0.048
+user	0.005 0.003 0.004 0.000 0.000 0.000 0.000 0.008 0.000 0.000
+sys	0.006 0.010 0.008 0.012 0.009 0.010 0.011 0.005 0.011 0.012
 
+average real = 0.0479
+average user = 0.002
+average sys = 0.0094
+file size = 10996
+```
 
 Binary results:
 ```
-run     1        2        3        4        5        6        7        8        9        10
-real    0m0.010s 0m0.009s 0m0.013s 0m0.008s 0m0.008s 0m0.008s 0m0.009s 0m0.010s 0m0.007s 0m0.008s
-user    0m0.001s 0m0.007s 0m0.000s 0m0.000s 0m0.006s 0m0.000s 0m0.000s 0m0.000s 0m0.000s 0m0.000s
-sys     0m0.008s 0m0.000s 0m0.011s 0m0.005s 0m0.001s 0m0.007s 0m0.007s 0m0.006s 0m0.006s 0m0.006s
+run #   1     2     3     4     5     6     7     8     9     10
+real 	0.046 0.045 0.046 0.045 0.044 0.046 0.043 0.048 0.054 0.050
+user	0.003 0.005 0.000 0.000 0.000 0.000 0.000 0.000 0.004 0.000
+sys	0.009 0.005 0.010 0.010 0.009 0.012 0.008 0.011 0.009 0.011
+
+average real = 0.0467
+average user = 0.0012
+average sys = 0.0094
+file size = 12714
 ```
 
-Averages: real = 0.009s, user = 0.0014s, sys = 0.0057
+### A single process
 
-Plain-text
-```   
-runs    1        2        3        4        5        6        7        8        9        10
-real    0m0.011s 0m0.008s 0m0.009s 0m0.007s 0m0.010s 0m0.007s 0m0.012s 0m0.008s 0m0.010s 0m0.008s
-user    0m0.009s 0m0.005s 0m0.007s 0m0.006s 0m0.009s 0m0.005s 0m0.000s 0m0.006s 0m0.000s 0m0.000s
-sys     0m0.000s 0m0.000s 0m0.000s 0m0.000s 0m0.000s 0m0.000s 0m0.010s 0m0.000s 0m0.008s 0m0.007s
+The commands were modified to time the speed when only one process was considered. The process used was specifically chosen because of its moderate number of file descriptors (10), which was neither too high or too low compared to all other processes running on the machine.
 
-Averages: real = 0.0091s, user = 0.0047s, sys = 0.0025
+Again, each format was repeated for 10 repetitions to gather a sufficient sample size.
 
-### A single PID
+```
+# plain-text
+time ./tableViewer 26732 --output_TXT
+# binary
+time ./tableViewer 26732 --output_binary
+```
 
+Plain-text results:
+```
+real	0.012 0.011 0.012 0.013 0.011 0.013 0.011 0.013 0.014 0.011
+user 	0.000 0.000 0.000 0.000 0.000 0.000 0.004 0.000 0.000 0.000
+sys	0.005 0.005 0.004 0.005 0.004 0.005 0.000 0.005 0.005 0.005
+
+real = 0.0121
+user = 0.0004
+sys = 0.0043
+file size: 426
+```
+
+Binary results: 
+```
+real	0.011 0.013 0.014 0.012 0.011 0.011 0.012 0.009 0.010 0.012
+user	0.000 0.000 0.000 0.000 0.004 0.000 0.002 0.000 0.000 0.005
+sys	0.005 0.005 0.006 0.005 0.000 0.004 0.003 0.003 0.005 0.000
+
+average real = 0.0115
+average user = 0.0011
+average sys = 0.0036
+file size: 413
+```
+
+### Conclusions
+
+We find that the "real" and "sys" times were highly similar when printing to binary and plain-text files, both when multiple processes were considered and when a single process was considered.  We also find that binary and plain-text file sizes were highly similar when printing a single process (413 vs 426). When printing multiple processes, the binary file was actually longer than the plain-text (12714 vs 10996).
+
+If we consider the "sys" times, then the time taken by the system to write the binary and plain-text outputs to the filesystem was identical when printing all processes. This can be explained by two reasons. Firstly, a large portion of the output is actually alphabetic output (filenames), which is stored in practically identical ways in both plain text and binary files. These strings would not be printed appreciably differently between binary and plain-text output. Secondly, a major benefit of binary only arises when we store numbers greater than 4-digits long (because space for one 32-bit int = 4 8-bit chars). It is inefficient for numbers less than 4-digits long. Given the rare occurrence of large numbers in the data, this advantage to binary never materialized in a significant way. In fact, based on the fact that the binary file was longer than the plain-text file (12714 vs 10996), the storage of smaller numbers as integers likely contributed to making the binary format less space efficient.
+
+If we consider "user" times, we see that binary output is faster than plain-text (0.0012 vs 0.002 seconds) when printing all processes. Since "user" time refers to CPU time used in running the code, I believe that this difference comes down to the implementation-specific details of the code. Printing of the table to plain-text requires multiple calls to print_table (one for each process), which may be computationally intensive due to the fact that the call stack is being frequently modified with new calls. This possible explanation is also consistent with the fact that binary "user" time was actually much longer than the plain-text "user" time (0.011 vs 0.0004); printing a single process' data significantly reduces the number of calls required to print the table to plain-text.
+
+Finally, the "real" time, which reflects the total wall time spent from start to finish, indicates there is negligible difference between binary and text outputs from a practical standpoint. The "real" time includes time when the system chooses to compute other processes by blocking this program's process. Given the relatively small size of the output files being handled, speed differences between format may have been masked by natural fluctuations in CPU and memory utilization due to other users and system background processes.
+
+In conclusion, it was found that binary and plain-text formats for the tested output were highly similar in their execution time. I suggest that implementation-specific details can be a significant determinant of how the "user" time changes in relation to the number of processes printed. If a much larger composite table was tested here (thousands of rows, multiple megabytes of data, etc.), then we can more accurately make an assessment of execution time and file size differences between plain-text and binary formats.

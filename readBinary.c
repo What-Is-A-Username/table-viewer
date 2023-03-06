@@ -1,9 +1,16 @@
+// Debugging file
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "processes.h"
 #include "printTables.h"
 
+/**
+ * Read composite table from a binary file "compositeTable.bin"
+ * @param numProcessesFound A pointer to an int that will store the number of processes read from file
+ * @return Returns pointer to a dynamically allocated array with composite table data if successful. Returns NULL otherwise.
+*/
 ProcessData** read_composite_binary(int* numProcessesFound) {
     FILE* binaryStream = fopen("compositeTable.bin", "rb");
     if (binaryStream == NULL) {
@@ -44,5 +51,6 @@ ProcessData** read_composite_binary(int* numProcessesFound) {
 int main() {
     int num = 0;
     ProcessData** procs = read_composite_binary(&num);
-    print_table(print_composite_header, print_composite_content, print_composite_footer, procs, num, stdout);
+    if (procs != NULL)
+        print_table(print_composite_header, print_composite_content, print_composite_footer, procs, num, stdout);
 }
