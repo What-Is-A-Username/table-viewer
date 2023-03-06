@@ -66,7 +66,6 @@ void printOffendingProcesses(long threshold, ProcessData **processes, int numPro
 */
 int main(int argc, char **argv)
 {
-    // TODO: Parse command line arguments
     /**
      * Display only process FD table. Corresponds with ARG_PER_PROCESS.
      */
@@ -106,8 +105,6 @@ int main(int argc, char **argv)
      * Has a process ID been set via command line arguments?
      */
     bool pidSet = false;
-
-    // TODO: Implement --output_TXT and --output_binary to save composite table to compositeTable.txt and compositeTable.bin respectively.
 
     /**
      * Output composite table to text?
@@ -212,7 +209,6 @@ int main(int argc, char **argv)
     }
 
     // show composite table if explicitly given in arguments, or if no table arguments were given
-    // TODO: Should row numbers be added to all tables, not only composite? The two composite tables in the example have varied behavior for whether or not to print row numbers.
     if (showComposite || (!showPerProcess && !showSystemWide && !showVnodes && !showComposite))
     {
         print_table(print_composite_header, print_composite_content, print_composite_footer, processes, numProcessesFound, stdout);

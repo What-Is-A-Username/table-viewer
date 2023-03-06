@@ -42,7 +42,6 @@ FileDescriptorEntry *readFileDescriptor(ProcessData *process, linux_dirent *file
     // default inode value
     newRow->inode = process->inode;
 
-    // TODO: This returns the wrong inode
     // For sockets and pipes, parse the inode from the string type:[inode]
     int startIndex = -1;
 
@@ -92,15 +91,6 @@ FileDescriptorEntry *readFileDescriptor(ProcessData *process, linux_dirent *file
         }
         newRow->inode = strtoul(inodeString, NULL, 10);
     }
-
-    // struct stat inodestats;
-    // if (lstat(newRow->filename, &inodestats) == -1)
-    // {
-    //     printf("FD Inodes of %ld: %ld / %ld / %ld / %s / %ld \n", process->pid, fileEntry->d_ino, newRow->inode, stats.st_ino, newRow->filename, 0l);
-    //     return NULL;
-    // } else {
-    //     printf("FD Inodes of %ld: %ld / %ld / %ld / %s / %ld \n", process->pid, fileEntry->d_ino, newRow->inode, stats.st_ino, newRow->filename, inodestats.st_ino);
-    // }
 
     return newRow;
 }

@@ -12,7 +12,6 @@
  */
 typedef struct linux_dirent
 {
-    // inode
     unsigned long d_ino;
     off_t d_off;
     unsigned short d_reclen;
@@ -24,8 +23,17 @@ typedef struct linux_dirent
  */
 typedef struct fileDescriptorEntry
 {
+    /**
+     * File descriptor data
+    */
     unsigned long fd;
+    /**
+     * Inode
+    */
     unsigned long inode;
+    /**
+     * Filename
+    */
     char* filename;
 } FileDescriptorEntry;
 
@@ -34,9 +42,21 @@ typedef struct fileDescriptorEntry
  */
 typedef struct ProcessData
 {
+    /**
+     * Process identifier (PID)
+    */
     unsigned long pid;
+    /**
+     * Inode of entry within /proc/
+    */
     unsigned long inode;
+    /**
+     * Number of file descriptors stored in **fileDescriptors
+    */
     unsigned long size;
+    /**
+     * All file descriptors of the process
+    */
     FileDescriptorEntry **fileDescriptors;
 } ProcessData;
 
