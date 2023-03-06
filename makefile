@@ -7,14 +7,17 @@ tableViewer: stringUtils.o printTables.o readFileDescriptors.o readProcesses.o m
 .PHONY: clean
 
 clean:
-	rm -f printTables.o processes.o readFileDescriptors.o readProcesses.o stringUtils.o main.o
+	rm -f printTables.o processes.o readFileDescriptors.o readProcesses.o stringUtils.o main.o readBinary.o
 
 .PHONY: cleandist
 
 cleandist:
-	rm -f printTables.o processes.o readFileDescriptors.o readProcesses.o stringUtils.o main.o tableViewer
+	rm -f printTables.o processes.o readFileDescriptors.o readProcesses.o stringUtils.o main.o tableViewer readBinary.o binRead 
 
 .PHONY: help
+
+binRead: printTables.o readBinary.o
+	gcc printTables.o readBinary.o -o binRead
 
 help:
 	@echo "makefile rules available:"

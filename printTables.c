@@ -181,8 +181,9 @@ int print_composite_binary(char* fileName, ProcessData **processes, int numProce
     size_t filenameLen;
     for (size_t i = 0; i < numProcesses; i++)
     {
-        fwrite(&processes[i]->pid, sizeof(processes[i]->pid), 1, binaryStream);
-        fwrite(&processes[i]->size, sizeof(processes[i]->size), 1, binaryStream); // number of fds
+        fwrite(&processes[i]->pid, sizeof(unsigned long), 1, binaryStream);
+        fwrite(&processes[i]->inode, sizeof(unsigned long), 1, binaryStream);
+        fwrite(&processes[i]->size, sizeof(unsigned long), 1, binaryStream); // number of fds
         for (size_t j = 0; j < processes[i]->size; j++)
         {
             point = processes[i]->fileDescriptors[j];
@@ -199,3 +200,4 @@ int print_composite_binary(char* fileName, ProcessData **processes, int numProce
     fclose(binaryStream);
     return 0;
 }
+
