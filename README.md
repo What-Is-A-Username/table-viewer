@@ -4,10 +4,11 @@ This is a Linux-based tool developed with C which displays to the user informati
 
 The tool only considers processes owned by the user. This is determined by comparing the ownership of the corresponding `/proc/<pid>/` folder to the real user ID of the caller ([getuid()](https://man7.org/linux/man-pages/man2/getuid.2.html))
 
-- [Installation](#--installation)
-- [Quickstart](#--Quickstart)
-- [Docs](#--Docs)
-- [Runtime Comparison](#--Runtime-Comparison)
+- [Installation](#installation)
+- [Quickstart](#quickstart)
+- [Docs](#docs)
+- [Makefile](#make)
+- [Runtime Comparison](#runtime-comparison)
 
 ## Installation
 
