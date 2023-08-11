@@ -12,7 +12,13 @@ The tool only considers processes owned by the user. This is determined by compa
 
 ## Installation
 
-Installation is done with a single command.
+Download or clone the repository:
+```
+git clone https://github.com/What-Is-A-Username/table-viewer.git
+cd table-viewer
+```
+
+Installation is done with a single command using the Makefile.
 ```
 make tableViewer
 ```
